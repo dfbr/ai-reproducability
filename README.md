@@ -106,6 +106,22 @@ Define models and their providers in `config/models.json`:
 
 This is intentional - each model is tested with its optimal temperature setting rather than forcing uniform values across all models. Since the goal is to observe what models produce rather than strict experimental control, using each model's natural operating temperature provides more representative results.
 
+**Note on enabled property:**
+
+Each model in `models.json` now includes an `enabled` property (boolean). Only models with `"enabled": true` will be tested. To temporarily exclude a model from test runs (without deleting its configuration), set `"enabled": false` for that model. This is useful for disabling expensive or experimental models while keeping their settings for future use.
+
+Example:
+
+```json
+{
+  "name": "o3",
+  "provider": "openai",
+  "enabled": false,
+  "config": { "temperature": 1, "max_completion_tokens": 100000 },
+  "note": "Reasoning model - disabled due to high cost"
+}
+```
+
 ### system_prompt.txt & user_prompt.txt
 
 Plain text files containing the prompts:
