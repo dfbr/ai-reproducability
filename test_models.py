@@ -15,12 +15,30 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+# Configure logging with both console and daily file handler
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create logs directory if it doesn't exist
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+
+# Daily log file with date
+log_filename = log_dir / f"test_run_{datetime.now().strftime('%Y%m%d')}.log"
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+
+# File handler
+file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+
+# Add handlers to logger
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
 
 
 class ModelProvider(ABC):
@@ -57,20 +75,129 @@ class OpenAIProvider(ModelProvider):
         user_prompt: str,
         config: Dict[str, Any],
     ) -> str:
-        try:
-            response = self.client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=config.get("temperature", 0.7),
-                max_tokens=config.get("max_tokens", 2000),
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        def _token_value() -> Optional[int]:
+            return (
+                config.get("max_completion_tokens")
+                or config.get("max_output_tokens")
+                or config.get("max_tokens")
             )
+
+        def chat_completion(use_max_completion_tokens: bool = False) -> str:
+            params: Dict[str, Any] = {
+                "model": model_name,
+                "messages": messages,
+            }
+
+            # Only add temperature if specified in config
+            if "temperature" in config:
+                params["temperature"] = config["temperature"]
+
+            token_val = _token_value()
+            if token_val:
+                if use_max_completion_tokens:
+                    params["max_completion_tokens"] = token_val
+                else:
+                    params["max_tokens"] = token_val
+
+            response = self.client.chat.completions.create(**params)
             return response.choices[0].message.content
+
+        def completions(use_max_completion_tokens: bool = False) -> str:
+            # Fallback for models that require the /v1/completions endpoint
+            params: Dict[str, Any] = {
+                "model": model_name,
+                "prompt": f"System: {system_prompt}\nUser: {user_prompt}",
+            }
+
+            # Only add temperature if specified in config
+            if "temperature" in config:
+                params["temperature"] = config["temperature"]
+
+            token_val = _token_value()
+            if token_val:
+                if use_max_completion_tokens:
+                    params["max_completion_tokens"] = token_val
+                else:
+                    params["max_tokens"] = token_val
+
+            response = self.client.completions.create(**params)
+            return response.choices[0].text
+
+        def responses_api() -> str:
+            # Fallback for models supported only by the /v1/responses endpoint
+            params: Dict[str, Any] = {
+                "model": model_name,
+                "input": messages,
+            }
+
+            # Only add temperature if specified in config
+            if "temperature" in config:
+                params["temperature"] = config["temperature"]
+
+            token_val = _token_value()
+            if token_val:
+                params["max_output_tokens"] = token_val
+
+            response = self.client.responses.create(**params)
+            return self._extract_response_text(response)
+
+        last_error: Optional[Exception] = None
+
+        # 1) Try chat completions with legacy max_tokens
+        try:
+            return chat_completion(use_max_completion_tokens=False)
         except Exception as e:
-            logger.error(f"Error querying {model_name}: {str(e)}")
-            raise
+            last_error = e
+            message = str(e).lower()
+
+            # 2) Retry chat with the new max_completion_tokens parameter if hinted
+            if "max_completion_tokens" in message or "unsupported parameter: 'max_tokens'" in message:
+                try:
+                    return chat_completion(use_max_completion_tokens=True)
+                except Exception as e2:
+                    last_error = e2
+                    message = str(e2).lower()
+
+            # 3) If the model is not a chat model, try /v1/completions
+            if "not a chat model" in message or "v1/completions" in message:
+                try:
+                    return completions(use_max_completion_tokens="max_completion_tokens" in message)
+                except Exception as e3:
+                    last_error = e3
+                    message = str(e3).lower()
+
+            # 4) If the API suggests /v1/responses, try that endpoint
+            if "v1/responses" in message:
+                try:
+                    return responses_api()
+                except Exception as e4:
+                    last_error = e4
+
+        logger.error(f"Error querying {model_name}: {str(last_error) if last_error else 'Unknown error'}")
+        raise last_error if last_error else RuntimeError("Unknown error while querying model")
+
+    @staticmethod
+    def _extract_response_text(response: Any) -> str:
+        # The Responses API can shape-shift; try common access patterns before falling back to str().
+        for attr in ("output_text", "text", "content", "message"):
+            val = getattr(response, attr, None)
+            if isinstance(val, str):
+                return val
+
+        if hasattr(response, "output"):
+            output = getattr(response, "output")
+            try:
+                # Typical shape: response.output[0].content[0].text
+                return output[0].content[0].text  # type: ignore[index]
+            except Exception:
+                pass
+
+        return str(response)
 
 
 class ModelProviderFactory:
@@ -148,6 +275,15 @@ class ModelTester:
             logger.error(f"Invalid JSON in models config: {self.models_config_path}")
             raise
 
+    @staticmethod
+    def _token_setting(config: Dict[str, Any]) -> Any:
+        return (
+            config.get("max_completion_tokens")
+            or config.get("max_output_tokens")
+            or config.get("max_tokens")
+            or "N/A"
+        )
+
     def run_tests(self) -> None:
         logger.info(f"Starting tests with {len(self.models_config)} models")
         logger.info(f"System prompt: {self.system_prompt[:100]}...")
@@ -159,6 +295,14 @@ class ModelTester:
             model_name = model_config.get("name")
             provider_name = model_config.get("provider")
             config = model_config.get("config", {})
+            token_setting = self._token_setting(config)
+            
+            # Skip disabled models
+            if model_config.get("disabled", False):
+                logger.info(f"Skipping disabled model: {model_name} (provider: {provider_name})")
+                if model_config.get("note"):
+                    logger.info(f"  Note: {model_config['note']}")
+                continue
 
             logger.info(f"Testing model: {model_name} (provider: {provider_name})")
 
@@ -178,7 +322,7 @@ class ModelTester:
                     "system_prompt_hash": hash(self.system_prompt),
                     "user_prompt_hash": hash(self.user_prompt),
                     "temperature": config.get("temperature", "N/A"),
-                    "max_tokens": config.get("max_tokens", "N/A"),
+                    "max_tokens": token_setting,
                     "response": response,
                     "response_length": len(response),
                     "status": "success",
@@ -195,7 +339,7 @@ class ModelTester:
                     "system_prompt_hash": hash(self.system_prompt),
                     "user_prompt_hash": hash(self.user_prompt),
                     "temperature": config.get("temperature", "N/A"),
-                    "max_tokens": config.get("max_tokens", "N/A"),
+                    "max_tokens": token_setting,
                     "response": f"ERROR: {str(e)}",
                     "response_length": 0,
                     "status": "error",

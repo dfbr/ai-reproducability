@@ -5,31 +5,23 @@
       "provider": "openai",
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
-      }
-    },
-    {
-      "name": "gpt-5.2-pro",
-      "provider": "openai",
-      "config": {
-        "temperature": 0.7,
-        "max_tokens": 2000
+        "max_completion_tokens": 2000
       }
     },
     {
       "name": "gpt-5-mini",
       "provider": "openai",
       "config": {
-        "temperature": 0.7,
-        "max_tokens": 2000
+        "temperature": 1,
+        "max_completion_tokens": 2000
       }
     },
     {
       "name": "gpt-5-nano",
       "provider": "openai",
       "config": {
-        "temperature": 0.7,
-        "max_tokens": 2000
+        "temperature": 1,
+        "max_completion_tokens": 2000
       }
     },
     {
@@ -37,24 +29,24 @@
       "provider": "openai",
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_completion_tokens": 2000
       }
     },
     {
       "name": "gpt-5",
       "provider": "openai",
       "config": {
-        "temperature": 0.7,
-        "max_tokens": 2000
+        "temperature": 1,
+        "max_completion_tokens": 2000
       }
     },
     {
       "name": "gpt-5-pro",
       "provider": "openai",
       "config": {
-        "temperature": 0.7,
-        "max_tokens": 2000
-      }
+        "max_output_tokens": 2000
+      },
+      "note": "Requires v1/responses endpoint - temperature not supported"
     },
     {
       "name": "gpt-4.1",
@@ -117,7 +109,7 @@
       "provider": "openai",
       "config": {
         "temperature": 1,
-        "max_tokens": 2000
+        "max_completion_tokens": 2000
       }
     },
     {
@@ -125,7 +117,7 @@
       "provider": "openai",
       "config": {
         "temperature": 1,
-        "max_tokens": 2000
+        "max_completion_tokens": 2000
       }
     },
     {
@@ -133,15 +125,7 @@
       "provider": "openai",
       "config": {
         "temperature": 1,
-        "max_tokens": 2000
-      }
-    },
-    {
-      "name": "o1-mini",
-      "provider": "openai",
-      "config": {
-        "temperature": 1,
-        "max_tokens": 2000
+        "max_completion_tokens": 2000
       }
     }
   ]
