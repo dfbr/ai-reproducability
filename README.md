@@ -63,6 +63,12 @@ This uses default paths:
 python test_models.py --models custom_models.json --system-prompt my_system.txt --user-prompt my_user.txt --output my_results.json --openai-api-key "your-api-key"
 ```
 
+### Production use:
+
+```bash
+python .\test_models.py --models .\config\models.json --system-prompt .\prompts\system_prompt.txt --user-prompt .\prompts\user_prompt.txt --output .\results\how_many_glaciations_in_quaternary_period_production.json --openai-api-key <KEY HERE>
+```
+
 ### Command-line Options
 
 - `--models PATH`: Path to models configuration JSON (default: `config/models.json`)
@@ -220,3 +226,7 @@ ModelProviderFactory.register_provider("anthropic", AnthropicProvider)
 - Errors in individual model queries don't stop the entire test run
 - Full response text is preserved for detailed analysis
 - All logging is printed to console for real-time feedback
+
+**Note on daily log file:**
+
+Each test run also writes detailed logs to a daily log file in the `logs/` directory, named `test_run_YYYYMMDD.log`. This file contains all console output, errors, and status messages for every run on that day, making it easy to review the full execution history and debug issues. Logs are appended for each run, so you can track all activity for a given date in one place.
