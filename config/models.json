@@ -3,130 +3,152 @@
     {
       "name": "gpt-5.2",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_completion_tokens": 2000
+        "max_completion_tokens": 16384
       }
     },
     {
       "name": "gpt-5-mini",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 16384
+      },
+      "note": "Higher token limit needed for complete responses"
     },
     {
       "name": "gpt-5-nano",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 16384
+      },
+      "note": "Higher token limit needed for complete responses"
     },
     {
       "name": "gpt-5.1",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_completion_tokens": 2000
+        "max_completion_tokens": 16384
       }
     },
     {
       "name": "gpt-5",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 16384
+      },
+      "note": "Higher token limit needed for complete responses"
     },
     {
       "name": "gpt-5-pro",
       "provider": "openai",
+      "enabled": true,
       "config": {
-        "max_output_tokens": 2000
+        "max_output_tokens": 32768
       },
-      "note": "Requires v1/responses endpoint - temperature not supported"
+      "note": "Requires v1/responses endpoint - temperature not supported; high limit for reasoning"
     },
     {
       "name": "gpt-4.1",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 4096
       }
     },
     {
       "name": "gpt-4.1-mini",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 16384
       }
     },
     {
       "name": "gpt-4o",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 4096
       }
     },
     {
       "name": "gpt-4o-mini",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 16384
       }
     },
     {
       "name": "gpt-4-turbo",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 4096
       }
     },
     {
       "name": "gpt-4",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 8192
       }
     },
     {
       "name": "gpt-3.5-turbo",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 4096
       }
     },
     {
       "name": "o3",
       "provider": "openai",
+      "enabled": false,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 100000
+      },
+      "note": "Reasoning model - disabled due to high cost (~$40 per query)"
     },
     {
       "name": "o3-mini",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 65536
+      },
+      "note": "Reasoning model - high token limit accounts for hidden reasoning consumption"
     },
     {
       "name": "o1",
       "provider": "openai",
+      "enabled": true,
       "config": {
         "temperature": 1,
-        "max_completion_tokens": 2000
-      }
+        "max_completion_tokens": 100000
+      },
+      "note": "Reasoning model - high token limit accounts for hidden reasoning consumption"
     }
   ]
 }

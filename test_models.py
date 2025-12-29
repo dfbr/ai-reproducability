@@ -298,7 +298,7 @@ class ModelTester:
             token_setting = self._token_setting(config)
             
             # Skip disabled models
-            if model_config.get("disabled", False):
+            if not model_config.get("enabled", True):
                 logger.info(f"Skipping disabled model: {model_name} (provider: {provider_name})")
                 if model_config.get("note"):
                     logger.info(f"  Note: {model_config['note']}")
