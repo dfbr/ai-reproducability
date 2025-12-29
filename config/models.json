@@ -1,0 +1,148 @@
+{
+  "models": [
+    {
+      "name": "gpt-5.2",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5.2-pro",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5-mini",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5-nano",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5.1",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-5-pro",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4.1",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4.1-mini",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4o",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4o-mini",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4-turbo",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-4",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "gpt-3.5-turbo",
+      "provider": "openai",
+      "config": {
+        "temperature": 0.7,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "o3",
+      "provider": "openai",
+      "config": {
+        "temperature": 1,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "o3-mini",
+      "provider": "openai",
+      "config": {
+        "temperature": 1,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "o1",
+      "provider": "openai",
+      "config": {
+        "temperature": 1,
+        "max_tokens": 2000
+      }
+    },
+    {
+      "name": "o1-mini",
+      "provider": "openai",
+      "config": {
+        "temperature": 1,
+        "max_tokens": 2000
+      }
+    }
+  ]
+}
