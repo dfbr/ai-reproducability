@@ -100,6 +100,12 @@ Define models and their providers in `config/models.json`:
 }
 ```
 
+**Note on temperature settings:** Different models use different temperature values in the configuration:
+- Most models use `temperature: 0.7` (a common default balancing creativity and focus)
+- Some models (GPT-5 series variants and o-series models) use `temperature: 1` (their required/recommended default)
+
+This is intentional - each model is tested with its optimal temperature setting rather than forcing uniform values across all models. Since the goal is to observe what models produce rather than strict experimental control, using each model's natural operating temperature provides more representative results.
+
 ### system_prompt.txt & user_prompt.txt
 
 Plain text files containing the prompts:
