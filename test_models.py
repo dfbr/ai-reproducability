@@ -51,22 +51,33 @@ class ModelProvider(ABC):
         system_prompt: str,
         user_prompt: str,
         config: Dict[str, Any],
+        data_file_path: Optional[Path] = None,
     ) -> str:
         """Query the model and return the response."""
         raise NotImplementedError
 
+    @abstractmethod
+    def supports_file_upload(self) -> bool:
+        """Check if this provider supports file uploads."""
+        raise NotImplementedError
+
 
 class OpenAIProvider(ModelProvider):
-    """OpenAI API provider."""
+    """OpenAI API provider with support for both Chat Completions and Assistants API."""
 
     def __init__(self, api_key: Optional[str] = None):
         try:
             from openai import OpenAI
 
             self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            self.uploaded_files: Dict[str, str] = {}  # Cache uploaded file IDs
         except ImportError:
             logger.error("OpenAI package not installed. Install with: pip install openai")
             raise
+
+    def supports_file_upload(self) -> bool:
+        """OpenAI supports file uploads via Assistants API."""
+        return True
 
     def query(
         self,
@@ -74,7 +85,13 @@ class OpenAIProvider(ModelProvider):
         system_prompt: str,
         user_prompt: str,
         config: Dict[str, Any],
+        data_file_path: Optional[Path] = None,
     ) -> str:
+        # If a data file is provided, use Assistants API for file upload support
+        if data_file_path and data_file_path.exists():
+            return self._query_with_file(model_name, system_prompt, user_prompt, config, data_file_path)
+        
+        # Otherwise, use standard Chat Completions API
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -231,6 +248,137 @@ class OpenAIProvider(ModelProvider):
 
         return str(response)
 
+    def _upload_file(self, file_path: Path) -> str:
+        """Upload a file to OpenAI and return the file ID."""
+        file_key = str(file_path.absolute())
+        
+        # Check cache first
+        if file_key in self.uploaded_files:
+            logger.info(f"Using cached file ID for {file_path.name}")
+            return self.uploaded_files[file_key]
+        
+        logger.info(f"Uploading file: {file_path.name} ({file_path.stat().st_size / 1024:.2f} KB)")
+        
+        with open(file_path, "rb") as f:
+            file_object = self.client.files.create(
+                file=f,
+                purpose="assistants"
+            )
+        
+        self.uploaded_files[file_key] = file_object.id
+        logger.info(f"File uploaded successfully with ID: {file_object.id}")
+        return file_object.id
+
+    def _query_with_file(
+        self,
+        model_name: str,
+        system_prompt: str,
+        user_prompt: str,
+        config: Dict[str, Any],
+        data_file_path: Path,
+    ) -> str:
+        """Query using OpenAI Assistants API with file upload support."""
+        import time
+        
+        # Upload the file
+        file_id = self._upload_file(data_file_path)
+        
+        try:
+            # Create an assistant
+            logger.info(f"Creating assistant with model {model_name}")
+            assistant_params: Dict[str, Any] = {
+                "model": model_name,
+                "instructions": system_prompt,
+                "tools": [{"type": "file_search"}],
+            }
+            
+            # Add temperature if specified
+            if "temperature" in config:
+                assistant_params["temperature"] = config["temperature"]
+            
+            assistant = self.client.beta.assistants.create(**assistant_params)
+            
+            # Create a thread
+            thread = self.client.beta.threads.create()
+            
+            # Add message with file attachment
+            self.client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=user_prompt,
+                attachments=[
+                    {
+                        "file_id": file_id,
+                        "tools": [{"type": "file_search"}]
+                    }
+                ],
+            )
+            
+            # Run the assistant
+            logger.info(f"Running assistant on thread {thread.id}")
+            run = self.client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant.id,
+            )
+            
+            # Poll for completion
+            max_wait_time = 300  # 5 minutes
+            start_time = time.time()
+            
+            while run.status in ["queued", "in_progress"]:
+                if time.time() - start_time > max_wait_time:
+                    raise TimeoutError(f"Assistant run timed out after {max_wait_time} seconds")
+                
+                time.sleep(2)
+                run = self.client.beta.threads.runs.retrieve(
+                    thread_id=thread.id,
+                    run_id=run.id
+                )
+                logger.debug(f"Run status: {run.status}")
+            
+            if run.status != "completed":
+                error_msg = f"Assistant run failed with status: {run.status}"
+                if hasattr(run, "last_error") and run.last_error:
+                    error_msg += f" - {run.last_error}"
+                raise RuntimeError(error_msg)
+            
+            # Retrieve the response
+            messages = self.client.beta.threads.messages.list(
+                thread_id=thread.id,
+                order="desc",
+                limit=1
+            )
+            
+            if not messages.data:
+                raise RuntimeError("No response from assistant")
+            
+            # Extract text from the response
+            response_message = messages.data[0]
+            response_text = ""
+            
+            for content_block in response_message.content:
+                if content_block.type == "text":
+                    response_text += content_block.text.value
+            
+            if not response_text:
+                raise RuntimeError("Empty response from assistant")
+            
+            logger.info(f"✓ Assistant response received ({len(response_text)} chars)")
+            
+            return response_text
+            
+        finally:
+            # Clean up: delete the assistant and thread
+            try:
+                if 'assistant' in locals() and assistant:  # type: ignore[possibly-unbound]
+                    self.client.beta.assistants.delete(assistant.id)  # type: ignore[possibly-unbound]
+                    logger.debug(f"Deleted assistant {assistant.id}")  # type: ignore[possibly-unbound]
+                if 'thread' in locals() and thread:  # type: ignore[possibly-unbound]
+                    self.client.beta.threads.delete(thread.id)  # type: ignore[possibly-unbound]
+                    logger.debug(f"Deleted thread {thread.id}")  # type: ignore[possibly-unbound]
+            except Exception as cleanup_error:
+                logger.warning(f"Cleanup error: {cleanup_error}")
+
 
 class ModelProviderFactory:
     """Factory for creating model providers."""
@@ -270,10 +418,12 @@ class ModelTester:
         user_prompt_path: str,
         output_path: Optional[str] = None,
         openai_api_key: Optional[str] = None,
+        data_file_path: Optional[str] = None,
     ):
         self.models_config_path = Path(models_config_path)
         self.system_prompt_path = Path(system_prompt_path)
         self.user_prompt_path = Path(user_prompt_path)
+        self.data_file_path = Path(data_file_path) if data_file_path else None
 
         if openai_api_key:
             ModelProviderFactory.set_api_key("openai", openai_api_key)
@@ -285,6 +435,10 @@ class ModelTester:
         self.models_config = self._load_models_config()
         self.system_prompt = self._load_file(self.system_prompt_path)
         self.user_prompt = self._load_file(self.user_prompt_path)
+        
+        # Validate data file if provided
+        if self.data_file_path and not self.data_file_path.exists():
+            raise FileNotFoundError(f"Data file not found: {self.data_file_path}")
 
     @staticmethod
     def _load_file(path: Path) -> str:
@@ -328,6 +482,11 @@ class ModelTester:
             config = model_config.get("config", {})
             token_setting = self._token_setting(config)
             
+            # Validate required fields
+            if not model_name or not provider_name:
+                logger.error(f"Skipping invalid model config: missing name or provider")
+                continue
+            
             # Skip disabled models
             if not model_config.get("enabled", True):
                 logger.info(f"Skipping disabled model: {model_name} (provider: {provider_name})")
@@ -336,14 +495,27 @@ class ModelTester:
                 continue
 
             logger.info(f"Testing model: {model_name} (provider: {provider_name})")
+            
+            # Log if data file is being used
+            if self.data_file_path:
+                logger.info(f"  Using data file: {self.data_file_path.name} ({self.data_file_path.stat().st_size / 1024:.2f} KB)")
 
             try:
                 provider = ModelProviderFactory.create_provider(provider_name)
+                
+                # Check if provider supports file uploads if data file provided
+                if self.data_file_path and not provider.supports_file_upload():
+                    logger.warning(f"  Provider {provider_name} does not support file uploads, skipping data file")
+                    data_file = None
+                else:
+                    data_file = self.data_file_path
+                
                 response = provider.query(
                     model_name=model_name,
                     system_prompt=self.system_prompt,
                     user_prompt=self.user_prompt,
                     config=config,
+                    data_file_path=data_file,
                 )
 
                 result = {
@@ -352,6 +524,7 @@ class ModelTester:
                     "provider": provider_name,
                     "system_prompt_hash": hash(self.system_prompt),
                     "user_prompt_hash": hash(self.user_prompt),
+                    "data_file": str(self.data_file_path) if self.data_file_path else None,
                     "temperature": config.get("temperature", "N/A"),
                     "max_tokens": token_setting,
                     "response": response,
@@ -369,6 +542,7 @@ class ModelTester:
                     "provider": provider_name,
                     "system_prompt_hash": hash(self.system_prompt),
                     "user_prompt_hash": hash(self.user_prompt),
+                    "data_file": str(self.data_file_path) if self.data_file_path else None,
                     "temperature": config.get("temperature", "N/A"),
                     "max_tokens": token_setting,
                     "response": f"ERROR: {str(e)}",
@@ -391,20 +565,24 @@ class ModelTester:
 
         json_results: List[Dict[str, Any]] = []
         for result in results:
-            json_results.append(
-                {
-                    "timestamp": result["timestamp"],
-                    "model": result["model_name"],
-                    "provider": result["provider"],
-                    "system_prompt": self.system_prompt,
-                    "user_prompt": self.user_prompt,
-                    "response": result["response"],
-                    "temperature": result["temperature"],
-                    "max_tokens": result["max_tokens"],
-                    "response_length": result["response_length"],
-                    "status": result["status"],
-                }
-            )
+            json_entry = {
+                "timestamp": result["timestamp"],
+                "model": result["model_name"],
+                "provider": result["provider"],
+                "system_prompt": self.system_prompt,
+                "user_prompt": self.user_prompt,
+                "response": result["response"],
+                "temperature": result["temperature"],
+                "max_tokens": result["max_tokens"],
+                "response_length": result["response_length"],
+                "status": result["status"],
+            }
+            
+            # Add data_file info if present
+            if result.get("data_file"):
+                json_entry["data_file"] = result["data_file"]
+            
+            json_results.append(json_entry)
 
         all_results: List[Dict[str, Any]] = []
         if self.output_path.exists():
@@ -454,6 +632,11 @@ def main():
     )
 
     parser.add_argument(
+        "--data-file",
+        help="Path to data file to upload and analyze (optional, supports large files via Assistants API)",
+    )
+
+    parser.add_argument(
         "--openai-api-key",
         help="OpenAI API key (if not provided, uses OPENAI_API_KEY environment variable)",
     )
@@ -467,6 +650,7 @@ def main():
             user_prompt_path=args.user_prompt,
             output_path=args.output,
             openai_api_key=args.openai_api_key,
+            data_file_path=args.data_file,
         )
         tester.run_tests()
 
