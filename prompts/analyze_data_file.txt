@@ -1,0 +1,9 @@
+Analyze the provided data file and identify:
+
+1. The overall structure and format of the data
+2. Key patterns or trends visible in the data
+3. Any anomalies or interesting observations
+4. Summary statistics (if numerical data)
+5. Recommendations for further analysis
+
+Provide a concise but comprehensive analysis.
