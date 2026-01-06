@@ -87,7 +87,7 @@ class OpenAIProvider(ModelProvider):
                 or config.get("max_tokens")
             )
 
-        def chat_completion(use_max_completion_tokens: bool = False) -> str:
+        def chat_completion(use_max_completion_tokens: bool = False, reduce_tokens: bool = False) -> str:
             params: Dict[str, Any] = {
                 "model": model_name,
                 "messages": messages,
@@ -99,6 +99,10 @@ class OpenAIProvider(ModelProvider):
 
             token_val = _token_value()
             if token_val:
+                # If we need to reduce tokens due to context length error, use a smaller value
+                if reduce_tokens:
+                    token_val = min(token_val, 4096)
+                
                 if use_max_completion_tokens:
                     params["max_completion_tokens"] = token_val
                 else:
@@ -107,7 +111,7 @@ class OpenAIProvider(ModelProvider):
             response = self.client.chat.completions.create(**params)
             return response.choices[0].message.content
 
-        def completions(use_max_completion_tokens: bool = False) -> str:
+        def completions(use_max_completion_tokens: bool = False, reduce_tokens: bool = False) -> str:
             # Fallback for models that require the /v1/completions endpoint
             params: Dict[str, Any] = {
                 "model": model_name,
@@ -120,6 +124,10 @@ class OpenAIProvider(ModelProvider):
 
             token_val = _token_value()
             if token_val:
+                # If we need to reduce tokens due to context length error, use a smaller value
+                if reduce_tokens:
+                    token_val = min(token_val, 4096)
+                
                 if use_max_completion_tokens:
                     params["max_completion_tokens"] = token_val
                 else:
@@ -163,15 +171,39 @@ class OpenAIProvider(ModelProvider):
                     last_error = e2
                     message = str(e2).lower()
 
-            # 3) If the model is not a chat model, try /v1/completions
+            # 3) If context length exceeded, retry with reduced max_tokens
+            if "context_length_exceeded" in message or "maximum context length" in message:
+                logger.warning(f"Context length exceeded for {model_name}, retrying with reduced max_tokens")
+                try:
+                    return chat_completion(use_max_completion_tokens=False, reduce_tokens=True)
+                except Exception as e2:
+                    last_error = e2
+                    message = str(e2).lower()
+                    # Also try with max_completion_tokens if still failing
+                    if "max_completion_tokens" in message or "unsupported parameter: 'max_tokens'" in message:
+                        try:
+                            return chat_completion(use_max_completion_tokens=True, reduce_tokens=True)
+                        except Exception as e3:
+                            last_error = e3
+                            message = str(e3).lower()
+
+            # 4) If the model is not a chat model, try /v1/completions
             if "not a chat model" in message or "v1/completions" in message:
                 try:
                     return completions(use_max_completion_tokens="max_completion_tokens" in message)
                 except Exception as e3:
                     last_error = e3
                     message = str(e3).lower()
+                    # 5) Retry completions with reduced tokens if context length exceeded
+                    if "context_length_exceeded" in message or "maximum context length" in message:
+                        logger.warning(f"Context length exceeded for {model_name}, retrying completions with reduced max_tokens")
+                        try:
+                            return completions(use_max_completion_tokens="max_completion_tokens" in message, reduce_tokens=True)
+                        except Exception as e4:
+                            last_error = e4
+                            message = str(e4).lower()
 
-            # 4) If the API suggests /v1/responses, try that endpoint
+            # 6) If the API suggests /v1/responses, try that endpoint
             if "v1/responses" in message:
                 try:
                     return responses_api()
@@ -247,8 +279,7 @@ class ModelTester:
             ModelProviderFactory.set_api_key("openai", openai_api_key)
 
         if output_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"results/results_{timestamp}.json"
+            output_path = "results/all_results.json"
         self.output_path = Path(output_path)
 
         self.models_config = self._load_models_config()
